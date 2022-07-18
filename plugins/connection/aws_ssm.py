@@ -385,6 +385,10 @@ class Connection(ConnectionBase):
     def exec_command(self, cmd, in_data=None, sudoable=True):
         ''' run a command on the ssm host '''
 
+        # demangle
+        cmd = ''.join(cmd.split('"` echo '))
+        cmd = ''.join(cmd.split(' `" )'))
+
         super(Connection, self).exec_command(cmd, in_data=in_data, sudoable=sudoable)
 
         display.vvv(u"EXEC {0}".format(to_text(cmd)), host=self.host)
@@ -490,7 +494,13 @@ class Connection(ConnectionBase):
             return (returncode, stdout)
         else:
             # Get command return code
-            returncode = int(stdout.splitlines()[-2])
+            # returncode = int(stdout.splitlines()[-2])
+            
+            # workaround until https://github.com/ansible-collections/community.aws/issues/113 is fixed
+            try:
+                returncode = int(stdout.splitlines()[-2])
+            except:
+                returncode = 0
 
             # Throw away ending lines
             for x in range(0, 3):
@@ -582,6 +592,7 @@ class Connection(ConnectionBase):
     def _file_transport_command(self, in_path, out_path, ssm_action):
         ''' transfer a file from using an intermediate S3 bucket '''
 
+
         path_unescaped = u"{0}/{1}".format(self.instance_id, out_path)
         s3_path = path_unescaped.replace('\\', '/')
         bucket_url = 's3://%s/%s' % (self.get_option('bucket_name'), s3_path)
@@ -611,7 +622,7 @@ class Connection(ConnectionBase):
                 put_command_headers, in_path,
                 self._get_url('put_object', self.get_option('bucket_name'), s3_path, 'PUT', profile_name,
                               extra_args=put_args))
-            get_command = "curl '%s' -o '%s'" % (
+            get_command = "curl '%s'  --create-dirs -o '%s'" % (
                 self._get_url('get_object', self.get_option('bucket_name'), s3_path, 'GET', profile_name), out_path)
 
         client = self._get_boto_client('s3', profile_name=profile_name)
@@ -636,6 +647,11 @@ class Connection(ConnectionBase):
 
     def put_file(self, in_path, out_path):
         ''' transfer a file from local to remote '''
+
+        # demangle
+        out_path = out_path.lstrip('"` echo ')
+        out_path = ''.join(out_path.split(' `" )'))
+
 
         super(Connection, self).put_file(in_path, out_path)
 
